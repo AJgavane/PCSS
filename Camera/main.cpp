@@ -9,6 +9,7 @@
 #include <GL/GL.h>
 #include <GL/glext.h>
 #include "Constants.h"
+#include "HandelKeys.h"
 
 
 void handleKeys();
@@ -20,32 +21,35 @@ void GetFrameTime();
 void genQueries(GLuint qid[][1]);
 void swapQueryBuffers();
 
+bool createShadowMap();
+
+void DrawQuadGL();
+
+void initRendering();
+
 int main(int args, char** argv)
 {
 
 	printVec("LightOrigin: ", lightPosition);
-
-    printVec("camera  ", cameraPosition);
+    printVec("Camera  ", cameraPosition);
     printVec("Center ", lookAt);
+	
     float dTheta = 0.01; int rotAngle = 45;
 
-	Shader basic("./res/basic.vs", "./res/basic.fs");
-    Shader firstPass("./res/firstPass.vs", "./res/firstPass.fs", "./res/firstPass.gs");
-    Shader secondPass("./res/secondPass.vs", "./res/secondPass.fs");
-    Shader debugDepthQuad("./res/depthMap.vs", "./res/depthMap.fs");
+	Shader shadowMapShader("./res/shadowMap.vs", "./res/shadowMap.fs");
+	Shader lightViewShader("./res/lightView.vs", "./res/lightView.fs");
+	Shader basicShader("./res/basic.vs", "./res/basic.fs");
 
-    // Shader test("./res/test.vs", "./res/test.fs");
+	
+	
     Model floor("./res/models/floor/floor.obj");
     glm::mat4 modelFloor;
-    modelFloor = glm::scale(modelFloor, glm::vec3(01.0f));	// it's a bit too big for our scene, so scale it down
+    modelFloor = glm::scale(modelFloor, glm::vec3(0.5f, 01.0f, 0.5f));	// it's a bit too big for our scene, so scale it down
     modelFloor = glm::translate(modelFloor, glm::vec3(0.00f, -1.00f, 1.00f));
 
-    //Model cube2("./res/models/room/room.obj");
     glm::mat4 modelPalm;
-    // Model palm("./res/models/palm/palm.obj");
-    // modelPalm = glm::scale(modelPalm, glm::vec3(0.3f));
 	Model palm;
-	int model_number = ModelName::CONFERENCE;
+	int model_number = ModelName::LUCY_50K;
 	CountNumberOfPoints = !true; debug = !true;
 	runtime = true; avgNumFrames = 100; csv = true;  dTheta = 0;
     switch (model_number)
@@ -244,14 +248,27 @@ int main(int args, char** argv)
 	    
     float theta = 0;
 
-   
+	initRendering();
+	shadowMapShader.use();
+	shadowMapShader.disable();
+	lightViewShader.use();
+	lightViewShader.setInt("shadowMap", 0);
+	lightViewShader.disable();
+	basicShader.use();
+	basicShader.disable();
+	
     GLuint64 virTime;
     float avgVIR_time = 0.0f;
     genQueries(queryID_VIR);
     genQueries(queryID_lightPass);
     lastTime = SDL_GetTicks();
+	depthMapToggle = true;
+	m_shadowTechnique = ShadowTechnique::None;
+	
     // Test
     while (!display.isClosed()) {
+		display.Clear(0.0f, 0.15f, 0.3f, 1.0f);
+		numFrames++;
         if (printCameraCoord) {
             printVec("camera  ", cameraPosition);
             printVec("Center ", lookAt);
@@ -263,25 +280,71 @@ int main(int args, char** argv)
         Camera camera(cameraPosition, fov, (float)WIDTH, (float)HEIGHT, zNear, zFar, lookAt, bbox);
         glm::mat4 projection = camera.GetPerspProj();
         glm::mat4 view = camera.GetView();
-       
-       
-        display.Clear(0.0f, 0.15f, 0.3f, 1.0f);
+                 	
       //  theta = theta + dTheta;
       //  modelPalm = glm::rotate(modelPalm, glm::sin(dTheta), glm::vec3(0.0f, 1.0f, 0.0f)); // for sapce suit
+		// Render Shadow map from light's point of view
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    	if( depthMapToggle)
+    	{
+			GLuint prevFBO = 0;
+			glGetIntegerv(GL_FRAMEBUFFER, (GLint*)&prevFBO);
+    		
+			shadowMapShader.use();				
 
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_CULL_FACE);
+				glViewport(0, 0, WIDTH, HEIGHT);
 
-        glBeginQuery(GL_TIME_ELAPSED, queryID_VIR[queryBackBuffer][0]);
-		basic.use();
-		basic.setMat4("projection", projection);
-		basic.setMat4("view", view);
-		basic.setMat4("model", modelPalm);
-		basic.setVec3("lightPosition", lightPosition);
-		basic.setVec3("eye", cameraPosition);
-		palm.Draw(basic);
-        glEndQuery(GL_TIME_ELAPSED);
+    			glBindFramebuffer(GL_FRAMEBUFFER, m_shadowMapFBO);
+					
+				glClear(GL_DEPTH_BUFFER_BIT);
+				glEnable((GL_POLYGON_OFFSET_FILL));
+				glPolygonOffset(4.0f, 32.0f);
+				shadowMapShader.setMat4("projection", projection);
+				shadowMapShader.setMat4("view", view);
+				basicShader.setMat4("model", modelPalm);
+				palm.Draw(shadowMapShader);
+				
+			shadowMapShader.disable();
 
+			glDisable(GL_POLYGON_OFFSET_FILL);
+			glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+			glViewport(0, 0, WIDTH, HEIGHT);
+    		
+    	}
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
+	   	if(depthMapToggle)
+    	{
+			glViewport(0, 0, WIDTH, HEIGHT);
+			lightViewShader.use();
+				glDisable(GL_DEPTH_TEST);
+				glDisable(GL_CULL_FACE);
+				//lightViewShader.SetShadowMapTexture(ShadowDepthTextureUnit);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, depthMap);
+    			lightViewShader.setFloat("light_zFar", 1.0);
+				lightViewShader.setFloat("light_zNear", 40.0);
+				DrawQuadGL();
+				glEnable(GL_DEPTH_TEST);
+				glEnable(GL_CULL_FACE);
+			lightViewShader.disable();
+    	}
+		else 
+		{
+			glViewport(0, 0, WIDTH, HEIGHT);
+			glBeginQuery(GL_TIME_ELAPSED, queryID_VIR[queryBackBuffer][0]);
+			basicShader.use();
+			basicShader.setMat4("projection", projection);
+			basicShader.setMat4("view", view);
+			basicShader.setVec3("lightPosition", lightPosition);
+			basicShader.setVec3("eye", cameraPosition);
+			basicShader.setMat4("model", modelPalm);
+			palm.Draw(basicShader);
+			basicShader.setMat4("model", modelFloor);
+			floor.Draw(basicShader);
+			basicShader.disable();
+			glEndQuery(GL_TIME_ELAPSED);
+		}
         /*****************************************
          * Display time and number of points     *
         /*****************************************/
@@ -294,11 +357,86 @@ int main(int args, char** argv)
         }
 		
         swapQueryBuffers();
-        display.Update();
-        numFrames++;
+        display.Update();       
     }
-   
+	glDeleteFramebuffers(1, &m_shadowMapFBO);
     return 0;
+}
+
+GLuint quadVAO = 0;
+GLuint quadVBO;
+void DrawQuadGL()
+{
+	if (quadVAO == 0)
+	{
+		float quadVertices[] = {
+			// positions        // texture Coords
+			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+		};
+		// setup plane VAO
+		glGenVertexArrays(1, &quadVAO);
+		glGenBuffers(1, &quadVBO);
+		glBindVertexArray(quadVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	}
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
+}
+
+
+void initRendering()
+{
+
+	
+	if(createShadowMap() == false)
+	{
+		std::cout << "Shadow map creation failed" << std::endl;
+	}
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glDepthFunc(GL_LESS);
+	glCullFace(GL_BACK);
+	glDisable(GL_BLEND);
+	glClearDepthf(1.0f);
+	
+	for (GLuint unit = 0; unit < NumTextureUnits; ++unit)
+	{
+		glBindSampler(unit, 0);
+	}
+}
+
+bool createShadowMap()
+{
+	GLuint prevFBO = 0;
+	glGetIntegerv(GL_FRAMEBUFFER, (GLint*)&prevFBO);
+
+	glGenFramebuffers(1, &m_shadowMapFBO);
+
+	glGenTextures(1, &depthMap);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, m_shadowMapFBO);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+	return true;
 }
 
 // call this function when initializating the OpenGL settings
@@ -321,120 +459,6 @@ void swapQueryBuffers() {
     else {
         queryBackBuffer = 1;
         queryFrontBuffer = 0;
-    }
-}
-
-void handleKeys() {
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-            /* Look for a keypress */
-        case SDL_KEYDOWN:
-            /* Check the SDLKey values and move change the coords */
-            switch (event.key.keysym.sym) {
-            case SDLK_w:
-                front = glm::normalize(lookAt - cameraPosition) * dt;
-                cameraPosition = cameraPosition + front;
-                lookAt = lookAt + front;
-                break;
-            case SDLK_s:
-                front = glm::normalize(lookAt - cameraPosition) * dt;
-                cameraPosition = cameraPosition - front;
-                lookAt = lookAt - front;
-                break;
-            case SDLK_a:
-                side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0))) * dt;
-                cameraPosition = cameraPosition - side;
-                lookAt = lookAt - side;
-                break;
-            case SDLK_d:
-                side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0))) * dt;
-                cameraPosition = cameraPosition + side;
-                lookAt = lookAt + side;
-                break;
-            case SDLK_q:
-                cameraPosition = cameraPosition + glm::vec3(0, dt, 0);
-                lookAt = lookAt + glm::vec3(0, dt, 0);
-                break;
-            case SDLK_e:
-                cameraPosition = cameraPosition - glm::vec3(0, dt, 0);
-                lookAt = lookAt - glm::vec3(0, dt, 0);
-                break;
-            case SDLK_p:
-                depthMapToggle = !depthMapToggle;
-                if (depthMapToggle) {
-                    depthMapIndex += 1;
-                    depthMapIndex = depthMapIndex % NUM_IMAGES;
-                    std::cout << "DepthMap: " << depthMapIndex << std::endl;
-                }
-                break;
-            case SDLK_i:
-                lookAt = lookAt + glm::vec3(0, 0, dt);
-                break;
-            case SDLK_k:
-                lookAt = lookAt + glm::vec3(0, 0, -dt);
-                break;
-            case SDLK_j:
-                lookAt = lookAt + glm::vec3(dt, 0, 0);
-                break;
-            case SDLK_l:
-                lookAt = lookAt + glm::vec3(-dt, 0, 0);
-                break;
-            case SDLK_o:
-                lightPosition = lightPosition + glm::vec3(0.0, dt, 0.0);
-                lightLookAt = lightLookAt + glm::vec3(0.0, dt, 0.0);
-                break;
-            case SDLK_u:
-                lightPosition = lightPosition - glm::vec3(0.0, dt, 0.0);
-                lightLookAt = lightLookAt - glm::vec3(0.0, dt, 0.0);
-                break;
-            case SDLK_ESCAPE:
-                display.Terminate();
-                std::cout << "escape\n";
-                break;
-            case SDLK_z:
-                bbox -= dt;
-                fov -= dt;
-                break;
-            case SDLK_x:
-                bbox += dt;
-                fov += dt;
-                break;
-            case SDLK_r:
-                cameraPosition = cameraDefaultPosition;
-                lookAt = lookAtDefault;
-                //lightPosition = defaultLightPosition;
-                //lightLookAt = lookAtDefault;
-                fov = defaultFOV;
-                break;
-            case SDLK_c:
-                printCameraCoord = true;
-                runtime = !runtime;
-                break;
-			case SDLK_h:
-				CountNumberOfPoints = !CountNumberOfPoints;
-				break;
-            default:
-                break;
-            }
-            break;
-        case SDL_MOUSEMOTION:
-            /* If the mouse is moving to the left */
-            if (event.motion.xrel < 0) {
-                front = glm::normalize(lookAt - cameraPosition);
-                side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0)));
-                lookAt = lookAt - side;
-            }
-            /* If the mouse is moving to the right */
-            else if (event.motion.xrel > 0) {
-                front = glm::normalize(lookAt - cameraPosition);
-                side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0)));
-                lookAt = lookAt + side;
-            }
-            break;
-        default:
-            break;
-        }
     }
 }
 

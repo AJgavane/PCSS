@@ -46,11 +46,16 @@ enum ModelName
 	CONFERENCE = 17
 };
 
+enum ShadowTechnique
+{
+	None = 0,
+	PCSS,
+	PCF
+};
 
 GLuint queryID_VIR[QUERY_BUFFERS][QUERY_COUNT];
-int queryBackBuffer = 0, queryFrontBuffer = 1;
-
 GLuint queryID_lightPass[QUERY_BUFFERS][QUERY_COUNT];
+int queryBackBuffer = 0, queryFrontBuffer = 1;
 
 /**************Camera ********************/
 bool printCameraCoord = true;
@@ -58,18 +63,13 @@ const glm::vec3 cameraDefaultPosition(5.0f, 6.0f, 8.0f);
 const glm::vec3 lookAtDefault(0.0f, 0.0f, 0.0f);
 glm::vec3 cameraPosition(0.60f, -01.20f, 1.30f);
 glm::vec3 lookAt(-4.20f, -10.65f, -15.4f);
-//glm::vec3 cameraPosition(0.62f, -02.2f, -2.850f);     //Sponza
-//glm::vec3 lookAt(13.41f, -8.19f, -19.05f);      //SPONZA
-// For testing
-//glm::vec3 cameraPosition(6.0f, 3.0f, -2.0f);
-//glm::vec3 lookAt(-6.0f, 1.0f, 2.0f);
 glm::vec3 front = glm::normalize(cameraPosition - lookAt);
 glm::vec3 side = glm::normalize(cameraPosition - lookAt);
 float VIRfov = glm::radians(45.0f);
 float fov = glm::radians(60.0f);
-float lightFOV = VIRfov;// glm::radians(90.0f);
-float defaultFOV = fov;// glm::radians(90.0f);
-float zNear = 01.0f;
+float lightFOV = VIRfov;
+float defaultFOV = fov;
+float zNear = 0.10f;
 float zFar = 40.0f;
 float counter = 0.0f;
 float bbox = 1.0f;
@@ -92,3 +92,18 @@ float LIGHT_SIZE = 0.5;
 bool runtime = false; bool csv = true;
 bool CountNumberOfPoints = true;
 bool debug = false;
+
+
+GLuint m_shadowMapFBO;
+ShadowTechnique m_shadowTechnique;
+
+GLuint depthMap;
+
+
+static const GLint ShadowDepthTextureUnit = 0;
+static const GLint ShadowPCFTextureUnit = 1;
+static const GLint NumTextureUnits = 2;
+
+GLuint m_samplers[NumTextureUnits];
+GLuint m_textures[NumTextureUnits];
+
