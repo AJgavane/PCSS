@@ -172,23 +172,6 @@ public:
     {
         glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
     }
-
-    void setUniformTexture(GLint handle,  GLint unit)
-    {
-		glUniform1i(handle, unit);
-    }
-
-    void SetShadowMapTexture(const GLint depthUnit)
-    {
-		GLint result = glGetUniformLocation(ID, "shadowMap");
-    	if( result == -1)
-    	{
-			std::cout << "Could not find uniform \"shadowMap\" in program" << std::endl;
-    	}
-		else 
-			setUniformTexture(result, depthUnit);
-    	
-    }
 private:
     // utility function for checking shader compilation/linking errors.
     // ------------------------------------------------------------------------
