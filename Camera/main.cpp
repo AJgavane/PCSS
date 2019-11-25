@@ -33,8 +33,9 @@ int main(int args, char** argv)
     float dTheta = 0.01; int rotAngle = 45;
 
 	Shader basicShader("./res/basic.vs", "./res/basic.fs");
-	Shader depthPassShader("./res/depthPass.vs", "./res/depthPass.fs");
+	Shader shadowMapShader("./res/shadowMap.vs", "./res/shadowMap.fs");
 	Shader lightViewShader("./res/lightView.vs", "./res/lightView.fs");
+	Shader depthPrePass("./res/depthPrePass.vs", "./res/depthPrePass.fs");
 
 	Model floor("./res/models/floor/floor.obj");
     glm::mat4 modelFloor;
@@ -274,7 +275,7 @@ int main(int args, char** argv)
 		glEnable(GL_DEPTH_TEST);
 		
 
-		if (!depthMapToggle)
+		if (!depthMapToggle)	// Create ShadowMap
 		{
 			// Bind FBO for writing
 			GLuint prevFBO = 0;
@@ -284,21 +285,21 @@ int main(int args, char** argv)
 			glClear(GL_DEPTH_BUFFER_BIT);
 			glEnable((GL_POLYGON_OFFSET_FILL));
 			glPolygonOffset(4.0f, 32.0f);
-			depthPassShader.use();
-			depthPassShader.setMat4("projection", projection);
-			depthPassShader.setMat4("view", view);
-			depthPassShader.setMat4("model", modelPalm);
-			palm.Draw(depthPassShader);
-			depthPassShader.disable();
+			shadowMapShader.use();
+			shadowMapShader.setMat4("projection", projection);
+			shadowMapShader.setMat4("view", view);
+			shadowMapShader.setMat4("model", modelPalm);
+			palm.Draw(shadowMapShader);
+			shadowMapShader.disable();
 			glDisable(GL_POLYGON_OFFSET_FILL);
 			glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 			glViewport(0, 0, WIDTH, HEIGHT);
 		}
-
-		if (!depthMapToggle)
+    	
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		if (depthMapToggle)		// Render Shadow map
 		{
-			glViewport(0, 0, WIDTH, HEIGHT);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glViewport(0, 0, WIDTH, HEIGHT);			
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_CULL_FACE);
 			lightViewShader.use();
@@ -313,8 +314,18 @@ int main(int args, char** argv)
 		}
 		else
 		{
-			glViewport(0, 0, WIDTH, HEIGHT);
 			glBeginQuery(GL_TIME_ELAPSED, queryID_VIR[queryBackBuffer][0]);
+			// Depth Prepass
+			depthPrePass.use();
+			depthPrePass.setMat4("projection", projection);
+			depthPrePass.setMat4("view", view);
+			depthPrePass.setMat4("model", modelPalm);
+			palm.Draw(depthPrePass);
+			depthPrePass.setMat4("model", modelFloor);
+			floor.Draw(depthPrePass);
+			depthPrePass.disable();
+			
+			glDepthFunc(GL_EQUAL);
 			basicShader.use();
 			basicShader.setMat4("projection", projection);
 			basicShader.setMat4("view", view);
@@ -324,6 +335,9 @@ int main(int args, char** argv)
 			palm.Draw(basicShader);
 			basicShader.setMat4("model", modelFloor	);
 			floor.Draw(basicShader);
+			basicShader.disable();
+			glDepthFunc(GL_LEQUAL);
+
 			glEndQuery(GL_TIME_ELAPSED);
 		}
         /*****************************************
