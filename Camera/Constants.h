@@ -43,7 +43,8 @@ enum ModelName
 	SPACE_SUIT = 14,
 	ENVIRONMENT = 15,
 	SQUARE = 16,
-	CONFERENCE = 17
+	CONFERENCE = 17,
+	BREAKFASTROOM = 18
 };
 
 enum ShadowTechnique
@@ -51,6 +52,15 @@ enum ShadowTechnique
 	None = 0,
 	PCSS,
 	PCF
+};
+
+enum SamplePattern
+{
+	POISSON_25_25 = 0,
+	POISSON_32_64 = 1,
+	POISSON_100_100 = 2,
+	POISSON_64_128 = 3,
+	REGULAR_49_225 = 4
 };
 
 GLuint queryID_VIR[QUERY_BUFFERS][QUERY_COUNT];
@@ -64,6 +74,7 @@ const glm::vec3 cameraDefaultPosition(5.0f, 6.0f, 8.0f);
 const glm::vec3 lookAtDefault(0.0f, 0.0f, 0.0f);
 glm::vec3 cameraPosition(0.60f, -01.20f, 1.30f);
 glm::vec3 lookAt(-4.20f, -10.65f, -15.4f);
+glm::vec3 Up(0.0f, 1.0f, 0.0f);
 //glm::vec3 cameraPosition(0.62f, -02.2f, -2.850f);     //Sponza
 //glm::vec3 lookAt(13.41f, -8.19f, -19.05f);      //SPONZA
 // For testing
@@ -75,8 +86,9 @@ float VIRfov = glm::radians(45.0f);
 float fov = glm::radians(60.0f);
 float lightFOV = VIRfov;// glm::radians(90.0f);
 float defaultFOV = fov;// glm::radians(90.0f);
-float zNear = 0.10f;
-float zFar = 40.0f;
+float zNear = 0.010f;
+float zFar = 100.0f;
+float l_zNear = 1.0f;
 float counter = 0.0f;
 float bbox = 1.0f;
 bool depthMapToggle = false;
@@ -99,17 +111,22 @@ bool runtime = false; bool csv = true;
 bool CountNumberOfPoints = true;
 bool debug = false;
 
+GLuint64 virTime;
+float avgVIR_time = 0.0f;
+
 GLuint quadVAO = 0;
 GLuint quadVBO;
 
 
 
 /**************************************/
-GLuint m_shadowMapFBO;
+GLuint m_shadowMapFBO = 0;
 ShadowTechnique m_shadowTechnique;
 
+GLuint depthTexture;
+
 static const GLint ShadowDepthTextureUnit = 0;
-static const GLint ShadowPCFTextureUnit = 1;
+static const GLint ShadowPcfTextureUnit = 1;
 static const GLint NumTextureUnits = 2;
 
 GLuint m_samplers[NumTextureUnits];

@@ -3,8 +3,6 @@
 
 #include <string>
 #include <iostream>
-#include <fstream>
-#include <sstream>
 #include <vector>
 #include "stb_image.h"
 #include <Assimp\Importer.hpp>
