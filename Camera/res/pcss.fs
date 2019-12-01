@@ -30,6 +30,13 @@ out vec4 FragColor;
 #define POISSON_64_128  3
 #define REGULAR_49_225  4
 
+const vec2 Poisson4[4] = vec2[](
+  vec2( -0.94201624, -0.39906216 ),
+  vec2( 0.94558609, -0.76890725 ),
+  vec2( -0.094184101, -0.92938870 ),
+  vec2( 0.34495938, 0.29387760 )
+);
+
 const vec2 Poisson25[25] = vec2[](
     vec2(-0.978698, -0.0884121),
     vec2(-0.841121, 0.521165),
@@ -401,7 +408,7 @@ bool isBlack(vec3 c)
 
 float biasedZ(float z0, vec2 dz_duv, vec2 offset)
 {
-    return z0 + dot(dz_duv, offset);
+    return z0 - dot(dz_duv, offset);
 }
 
 float zClipToEye(float z)
@@ -412,7 +419,7 @@ float zClipToEye(float z)
 float borderDepthTexture(sampler2D tex, vec2 uv)
 {
 	return ((uv.x <= 1.0) && (uv.y <= 1.0) && (uv.x >= 0.0) && (uv.y >= 0.0)) 
-			? textureLod(tex, uv, 0.0).z : 1.0;
+			? textureLod(tex, uv, 0.0).x : 1.0;
 }
 
 float borderPCFTexture(sampler2DShadow tex, vec3 uvz)
@@ -458,7 +465,7 @@ vec2 depthGradient(vec2 uv, float z)
     return dz_duv;
 }
 
-vec4 shading(vec3 worldPos, vec3 normal)
+vec4 shading(vec3 worldPos, vec3 normal, float visibility)
 {
 	vec3 lightColor = vec3(1.0);
 	vec3 MaterialDiffuseColor = texture(texture_diffuse1, fs_in.TexCoord).rgb;
@@ -477,7 +484,7 @@ vec4 shading(vec3 worldPos, vec3 normal)
 	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 2.0);
 	vec3 specular = spec * MaterialSpecularColor;
 
-	vec3 result = ambient + diffuse + specular; 
+	vec3 result = ambient + visibility * (diffuse + specular); 
 	return vec4(result,1.0);
 }
 
@@ -490,98 +497,43 @@ void findBlocker(
     vec2 uv,
     float z0,
     vec2 dz_duv,
-    vec2 searchRegionRadiusUV)
+    vec2 searchRegionRadius)
 {
     accumBlockerDepth = 0.0;
     numBlockers = 0.0;
 	maxBlockers = 300.0;
-    
+    vec2 texelSize = 1.0f / textureSize(u_shadowMap, 0);
+   // scale = getScale(fs_in.worldPos, z0);
      maxBlockers = 25.0;
     for (int i = 0; i < 25; ++i)
     {
-        vec2 offset = Poisson25[i] * searchRegionRadiusUV;
+        vec2 offset = Poisson25[i] * searchRegionRadius * texelSize;
         float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
         float z = biasedZ(z0, dz_duv, offset);
         if (shadowMapDepth <= z)
         {
             accumBlockerDepth += shadowMapDepth;
-            numBlockers++;
+            numBlockers += 1;
         }
     }
     
 }
 
 // Performs PCF filtering on the shadow map using multiple taps in the filter region.
-// float pcfFilter(vec2 uv, float z0, vec2 dz_duv, vec2 filterRadiusUV)
-// {
-//     float sum = 0.0;
+float pcfFilter(vec2 uv, float z0, vec2 dz_duv, vec2 filterRadiusUV)
+{
+    float sum = 0.0;
 
-//     switch (u_samplePattern)
-//     {
-//         case POISSON_25_25:
-//         {
-//             for (int i = 0; i < 25; ++i)
-//             {
-//                 vec2 offset = Poisson25[i] * filterRadiusUV;
-//                 float z = biasedZ(z0, dz_duv, offset);
-//                 sum += borderPCFTexture(g_shadowMapPcf, vec3(uv + offset, z));
-//             }
-//             return sum / 25.0;
-//         }
+     for (int i = 0; i < 4; ++i)
+        {
+            vec2 offset = Poisson4[i] * filterRadiusUV;//  * 0.0001;
+            float z = biasedZ(z0, dz_duv, offset);
+            sum += borderPCFTexture(u_shadowMapPcf, vec3(uv + offset, z));
+        }
+        return sum / 4.0;
 
-//         case POISSON_32_64:
-//         {
-//             for (int i = 0; i < 64; ++i)
-//             {
-//                 vec2 offset = Poisson64[i] * filterRadiusUV;
-//                 float z = biasedZ(z0, dz_duv, offset);
-//                 sum += borderPCFTexture(g_shadowMapPcf, vec3(uv + offset, z));
-//             }
-//             return sum / 64.0;
-//         }
-
-//         case POISSON_100_100:
-//         {
-//             for (int i = 0; i < 100; ++i)
-//             {
-//                 vec2 offset = Poisson100[i] * filterRadiusUV;
-//                 float z = biasedZ(z0, dz_duv, offset);
-//                 sum += borderPCFTexture(g_shadowMapPcf, vec3(uv + offset, z));
-//             }
-//             return sum / 100.0;
-//         }
-
-//         case POISSON_64_128:
-//         {
-//             for (int i = 0; i < 128; ++i)
-//             {
-//                 vec2 offset = Poisson128[i] * filterRadiusUV;
-//                 float z = biasedZ(z0, dz_duv, offset);
-//                 sum += borderPCFTexture(g_shadowMapPcf, vec3(uv + offset, z));
-//             }
-//             return sum / 128.0;
-//         }
-
-//         case REGULAR_49_225:
-//         {
-//             vec2 stepUV = filterRadiusUV / 7.0;
-//             for (int x = -7; x <= 7; ++x)
-//             {
-//                 for (int y = -7; y <= 7; ++y)
-//                 {
-//                     vec2 offset = vec2(x, y) * stepUV;
-//                     float z = biasedZ(z0, dz_duv, offset);
-//                     sum += borderPCFTexture(g_shadowMapPcf, vec3(uv + offset, z));
-//                 }                
-//             }
-//             float numSamples = 7.0 * 2.0 + 1.0;
-//             return sum / (numSamples * numSamples);
-//         }
-
-//         default:
-//             return 1.0;
-//     }
-// }
+  
+}
 
 float pcssShadow(vec2 uv, float z, vec2 dz_duv, float zEye)
 {
@@ -600,31 +552,40 @@ float pcssShadow(vec2 uv, float z, vec2 dz_duv, float zEye)
 	vec2 filterRadius = projectToLightUV(penumbraRadius, zEye);
 
 
-	// filtering
-	//float result = pcfFilter(uv, z, dz_duv, filterRadius);
+	//filtering
+	float result = pcfFilter(uv, z, dz_duv, filterRadius);
 
-	return avgBlockerDepth;
+	return result;
+}
+
+float PCFShadow(vec2 uv, float z0, vec2 dz_duv, float zEye)
+{
+    float shadow = 0.0f;
+    vec2 texelSize = 1.0f / textureSize(u_shadowMap, 0);
+    float samples = 128;
+    for (int i = 0; i < samples; ++i)
+    {
+        vec2 offset = Poisson128[i] * u_lightRadiusUV * texelSize;
+        float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
+        float z = biasedZ(z0, dz_duv, offset);
+        if (shadowMapDepth <= z)
+        {
+            shadow++;
+        }
+    }
+    return (1.0 - shadow/samples);
 }
 
 void main()
 {
-	vec2 uv = fs_in.LightPosition.xy/fs_in.LightPosition.w;
-	float z = fs_in.LightPosition.z / fs_in.LightPosition.w;
+	vec2 uv = fs_in.LightPosition.xy / fs_in.LightPosition.w;
+	float z = fs_in.LightPosition.z  / fs_in.LightPosition.w;
 
-	// Compute gradient using ddx/ddy before any branching
+	// // Compute gradient using ddx/ddy before any branching
     vec2 dz_duv = depthGradient(uv, z);
-    vec4 color = shading(fs_in.WorldPos.xyz, fs_in.Normal);
-    if (isBlack(color.rgb))
-    {
-        FragColor = color;
-    }
-    else 
-    {
-    	float zEye = -(u_lightView * fs_in.WorldPos).z;
-        float shadow = 1.0;
-       	if( texture(u_shadowMap, uv).x < z)
-       		shadow = 0.5;
-        FragColor = color * shadow;
-    }
-	
+    vec4 color = shading(fs_in.WorldPos.xyz, fs_in.Normal, 1.0);
+	float zEye = -(u_lightView * fs_in.WorldPos).z;
+    float shadow = 1.0;
+    shadow = PCFShadow(uv, z, dz_duv, zEye) ;
+    FragColor = shading(fs_in.WorldPos.xyz, fs_in.Normal, shadow) ;
 }

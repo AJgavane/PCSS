@@ -12,16 +12,16 @@ out VS_OUT {
 	vec4 LightPosition;
 } vs_out;
 
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-uniform mat4 lightViewProjClip2Tex;
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+uniform mat4 u_depthBiasMVP;
 
 void main()
 {
-	vs_out.WorldPos = model * vec4(position, 1.0);
-	vs_out.Normal = normalize(transpose(inverse(mat3(model))) * normal);
+	vs_out.WorldPos = u_model * vec4(position, 1.0);
+	vs_out.Normal = normalize(transpose(inverse(mat3(u_model))) * normal);
 	vs_out.TexCoord = texCoord;
-	vs_out.LightPosition = lightViewProjClip2Tex * vec4(position, 1.0);
-	gl_Position = projection * view * model * vec4(position, 1.0);
+	vs_out.LightPosition = u_depthBiasMVP * vs_out.WorldPos;
+	gl_Position = u_projection * u_view * vs_out.WorldPos;
 }

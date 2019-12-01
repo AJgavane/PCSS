@@ -39,9 +39,9 @@ int main(int args, char** argv)
 
     glm::mat4 modelPalm;
 	Model palm;
-	int model_number = ModelName::BREAKFASTROOM;
+	int model_number = ModelName::LUCY_100K;
 	CountNumberOfPoints = !true; debug = !true;
-	runtime = true; avgNumFrames = 125; csv = true;  dTheta = 0;
+	runtime = true; avgNumFrames = 125; csv = true;  //dTheta = 0;
     switch (model_number)
     {
 	case ModelName::BREAKFASTROOM:
@@ -124,6 +124,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
 		cameraPosition = glm::vec3(0.530f, 0.210f, -1.0f);
 		lookAt = glm::vec3(-4.3f, -5.9f, -11.3f);
+		bbox = 0.75f;
 		break;
 	case ModelName::LUCY_100K:
 		palm.LoadMeshModel("./res/models/Alucy/100k.obj");
@@ -134,6 +135,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
 		cameraPosition = glm::vec3(0.530f, 0.210f, -1.0f);
 		lookAt = glm::vec3(-4.3f, -5.9f, -11.3f);
+		bbox = 0.75f;
 		break;
 	case ModelName::LUCY_250K:
 		palm.LoadMeshModel("./res/models/Alucy/250k.obj");
@@ -144,6 +146,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
 		cameraPosition = glm::vec3(0.530f, 0.210f, -1.0f);
 		lookAt = glm::vec3(-4.3f, -5.9f, -11.3f);
+		bbox = 0.75f;
 		break;
 	case ModelName::LUCY_500K:
 		palm.LoadMeshModel("./res/models/Alucy/500k.obj");
@@ -164,6 +167,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
 		cameraPosition = glm::vec3(0.530f, 0.210f, -1.0f);
 		lookAt = glm::vec3(-4.3f, -5.9f, -11.3f);
+		bbox = 0.75f;
 		break;
 	case ModelName::LUCY_2M:
 		palm.LoadMeshModel("./res/models/Alucy/2m.obj");
@@ -174,6 +178,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
 		cameraPosition = glm::vec3(0.530f, 0.210f, -1.0f);
 		lookAt = glm::vec3(-4.3f, -5.9f, -11.3f);
+		bbox = 0.75f;
 		break;
 	case ModelName::BUDDHA:
 		palm.LoadMeshModel("./res/models/buddha/buddha.obj");
@@ -242,11 +247,14 @@ int main(int args, char** argv)
 	basicShader.use(); basicShader.disable();
 
 	// Light constants
-	Camera altCamera(lightPosition, fov, (float)WIDTH, (float)HEIGHT, zNear, zFar, lightLookAt, 2.0f);
+	Camera altCamera(lightPosition, lightFOV, (float)SHADOW_WIDTH, (float)SHADOW_HEIGHT, l_zNear, zFar, lightLookAt, 2.0f);
 
 	glm::mat4 lightView = altCamera.GetView();
 	glm::mat4 lightProj = altCamera.GetPerspProj();
-	glm::mat4 lightViewProj = altCamera.GetPersViewProj();
+	l_zNear = 1.0f / tan(lightFOV / 2.0f);
+	std::cout << "FW/FH: " << FrustumWidth << std::endl;
+	//glm::mat4 lightProj = glm::frustum(-bbox, bbox, -bbox, bbox, l_zNear, zFar);
+	glm::mat4 lightViewProj = lightProj * lightView;
 	glm::mat4 biasMatrix(
 		0.5, 0.0, 0.0, 0.0,
 		0.0, 0.5, 0.0, 0.0,
@@ -270,14 +278,22 @@ int main(int args, char** argv)
 
 	Shader depthPrePass("./res/depthPrePass.vs", "./res/depthPrePass.fs");
 	depthPrePass.use(); depthPrePass.disable();
-
 	
-
 	Shader hardShadows("./res/hardShadows.vs", "./res/hardShadows.fs");
 	hardShadows.use();
 	hardShadows.setMat4("u_depthBiasMVP", depthBiasMVP);
 	hardShadows.disable();
 
+	Shader pcss("./res/pcss.vs", "./res/pcss.fs");
+	pcss.use();
+	pcss.setMat4("u_depthBiasMVP", depthBiasMVP);
+	pcss.setVec3("u_lightPosition", lightPosition);
+	pcss.setMat4("u_lightView", lightView);
+	pcss.setFloat("u_light_zNear", l_zNear);
+	pcss.setFloat("u_light_zFar", zFar);
+	pcss.setVec2("u_lightRadiusUV", glm::vec2(LIGHT_SIZE/FrustumWidth));
+	pcss.setInt("u_samplePattern", SamplePattern::POISSON_25_25);
+	pcss.disable();
 	
 	glDepthFunc(GL_LESS); glEnable(GL_CULL_FACE);
 	genQueries(queryID_VIR);
@@ -330,30 +346,52 @@ int main(int args, char** argv)
 		{
 			glBeginQuery(GL_TIME_ELAPSED, queryID_VIR[queryBackBuffer][0]);
 			// Depth Prepass
-			depthPrePass.use();
-			depthPrePass.setMat4("projection", projection);
-			depthPrePass.setMat4("view", view);
-			depthPrePass.setMat4("model", modelPalm);
-			palm.Draw(depthPrePass);
-			depthPrePass.setMat4("model", modelFloor);
-			floor.Draw(depthPrePass);
+			/*depthPrePass.use();
+				depthPrePass.setMat4("u_projection", projection);
+				depthPrePass.setMat4("u_view", view);
+				depthPrePass.setMat4("u_model", modelPalm);
+				palm.Draw(depthPrePass);
+				depthPrePass.setMat4("u_model", modelFloor);
+				floor.Draw(depthPrePass);
 			depthPrePass.disable();//*/
-
-			glDepthFunc(GL_EQUAL);
-			glViewport(0, 0, WIDTH, HEIGHT);
-			hardShadows.use();			
-			hardShadows.setMat4("u_depthBiasMVP", depthBiasMVP);
-			hardShadows.setMat4("u_projection", projection);
-			hardShadows.setMat4("u_view", view);
-			BindFBOForReading(2);
-			hardShadows.setInt("u_shadowMap", 2);
-			hardShadows.setMat4("u_model", modelPalm);
-			palm.Draw(hardShadows);
-			hardShadows.setMat4("u_model", modelFloor);
-			floor.Draw(hardShadows);
-			hardShadows.disable();
-			glDepthFunc(GL_LEQUAL);//*/
-
+			//glClear(GL_COLOR_BUFFER_BIT);
+			if (!true)
+			{
+				//glDepthFunc(GL_EQUAL);
+				glViewport(0, 0, WIDTH, HEIGHT);
+				hardShadows.use();
+					hardShadows.setVec3("u_eye", cameraPosition);
+					hardShadows.setVec3("u_lightPosition", lightPosition);
+					hardShadows.setMat4("u_depthBiasMVP", depthBiasMVP);
+					hardShadows.setMat4("u_projection", projection);
+					hardShadows.setMat4("u_view", view);
+					BindFBOForReading(2);
+					hardShadows.setInt("u_shadowMap", 2);
+					hardShadows.setMat4("u_model", modelPalm);
+					palm.Draw(hardShadows);
+					hardShadows.setMat4("u_model", modelFloor);
+					floor.Draw(hardShadows);
+				hardShadows.disable();
+				glDepthFunc(GL_LEQUAL);//*/
+			}
+			else 
+			{
+				//glDepthFunc(GL_EQUAL);
+				glViewport(0, 0, WIDTH, HEIGHT);
+				pcss.use();
+					pcss.setVec3("u_eye", cameraPosition);
+					pcss.setMat4("u_depthBiasMVP", depthBiasMVP);
+					pcss.setMat4("u_view", view);
+					pcss.setMat4("u_projection", projection);
+					BindFBOForReading(2);
+					pcss.setInt("u_shadowMap", 2);
+					pcss.setMat4("u_model", modelPalm);
+					palm.Draw(pcss);
+					pcss.setMat4("u_model", modelFloor);
+					floor.Draw(pcss);
+				pcss.disable();
+				glDepthFunc(GL_LEQUAL);//*/
+			}
 			glEndQuery(GL_TIME_ELAPSED);
 		}
         /*****************************************
@@ -384,7 +422,7 @@ void initRendering()
 	std::cout << "depth Bits: " << depthBits << std::endl;
 	
 	
-	auto status = initShadowMap(0);
+	auto status = initShadowMap(1);
 	if (!status)
 		std::cout << "Error in init shadow map" << std::endl;
 
@@ -446,8 +484,10 @@ bool initShadowMap(int unit)
 				// Setup the shadowmap depth sampler
 				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+				float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+				glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
 				// Setup the shadowmap PCF sampler
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -497,7 +537,9 @@ void BindFBOForWriting()
 void BindFBOForReading(GLenum TextureUnit)
 {
 	glActiveTexture(GL_TEXTURE0 + TextureUnit);
-	glBindTexture(GL_TEXTURE_2D, depthTexture);
+	//glBindTexture(GL_TEXTURE_2D, depthTexture);
+	glBindTexture(GL_TEXTURE_2D, m_textures[ShadowDepthTextureUnit]);
+	glBindSampler(TextureUnit, m_samplers[ShadowPcfTextureUnit]);
 }
 
 void DrawQuadGL()
