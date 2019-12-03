@@ -27,7 +27,9 @@ public:
         m_numOfVertices = 0;
         loadModel(path);
         std::cout << "NumTri: " << m_numOfPrimitives 
-            << "\t NumVer: "  << m_numOfVertices<< std::endl;
+            << "\t NumVer: "  << m_numOfVertices
+			<< "\t Center: [" << m_Center.x << ", " << m_Center.y << ", " << m_Center.z << "]" 
+			<< "\t Extent: [" << m_Extent.x <<", " << m_Extent.y <<", " << m_Extent.z << "]" << std::endl;
     }
 	void LoadMeshModel(std::string path)
     {
@@ -43,12 +45,17 @@ public:
             meshes[i].Draw(shader);
     }
 
+	inline const glm::vec3 GetCenter() { return m_Center; }
+	inline const glm::vec3 GetExtent() { return m_Extent; }
+
 private:
     std::vector<Texture> textures_loaded;	// stores all the textures loaded so far, optimization to make sure textures aren't loaded more than once.
     std::vector<Mesh> meshes;
     std::string directory;
     int m_numOfPrimitives;
     int m_numOfVertices;
+	glm::vec3 m_Center;
+	glm::vec3 m_Extent;
     // Load model
     void loadModel(std::string path)
     {
@@ -88,6 +95,9 @@ private:
         std::vector<Texture> textures;
 
         // Walk through each of the mesh's vertices
+		m_Center = glm::vec3(0);
+		float mins[3] = { FLT_MAX, FLT_MAX, FLT_MAX };
+		float maxs[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
         m_numOfVertices += mesh->mNumVertices;
         for (unsigned int i = 0; i < mesh->mNumVertices; i++)
         {
@@ -98,6 +108,13 @@ private:
             vector.y = mesh->mVertices[i].y;
             vector.z = mesh->mVertices[i].z;
             vertex.Position = vector;
+			m_Center += vector;
+			for (int j = 0; j < 3; ++j)
+			{
+				mins[j] = std::min(vector[j], mins[j]);
+				maxs[j] = std::max(vector[j], maxs[j]);
+			}
+			
             // normals
 			vector.x = mesh->mNormals[i].x;
 			vector.y = mesh->mNormals[i].y;
@@ -122,6 +139,8 @@ private:
             vertices.push_back(vertex);
         }
         m_numOfPrimitives += mesh->mNumFaces;
+		m_Center = glm::vec3(m_Center.x / mesh->mNumVertices, m_Center.x / mesh->mNumVertices, m_Center.x / mesh->mNumVertices);
+		m_Extent = glm::vec3(maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]) * 0.5f;
         // now wak through each of the mesh's faces (a face is a mesh its triangle) and retrieve the corresponding vertex indices.
         for (unsigned int i = 0; i < mesh->mNumFaces; i++)
         {

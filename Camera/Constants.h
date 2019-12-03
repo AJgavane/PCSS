@@ -85,8 +85,8 @@ glm::vec3 side = glm::normalize(cameraPosition - lookAt);
 float VIRfov = glm::radians(45.0f);
 float fov = glm::radians(45.0f);
 float defaultFOV = fov;// glm::radians(90.0f);
-float zNear = 0.010f;
-float zFar = 100.0f;
+float zNear = 0.10f;
+float zFar = 32.0;
 float counter = 0.0f;
 float bbox = 0.750f;
 bool depthMapToggle = false;
@@ -96,10 +96,10 @@ int depthMapIndex = 0;
 glm::vec3 lightPosition(-1.0f, -0.10f, 5.8f);
 glm::vec3 lightLookAt(5.2f, -12.50f, -16.0f);
 glm::vec3 defaultLightPosition(5.0f, 10.0f, 10.0f);
-float lightFOV = VIRfov;// glm::radians(90.0f);
+float lightFOV = glm::radians(45.0f);
 float l_zNear = 01.0f;
-float LIGHT_SIZE = 01.0f;
-float FrustumWidth = 2.0f * l_zNear * tan(lightFOV * 0.5f );
+float LIGHT_SIZE = 0.010f;
+float FrustumWidth = 2 * std::tanf(lightFOV * 0.5f);
 float FrustumHeight = FrustumWidth;
 glm::vec3 Lfront = glm::normalize(lightPosition - lightLookAt);
 glm::vec3 Lside = Lfront;
@@ -127,8 +127,8 @@ ShadowTechnique m_shadowTechnique;
 
 GLuint depthTexture;
 
-static const GLint ShadowDepthTextureUnit = 0;
-static const GLint ShadowPcfTextureUnit = 1;
+static const GLint ShadowDepthTextureUnit = 2;
+static const GLint ShadowPcfTextureUnit = 3;
 static const GLint NumTextureUnits = 2;
 
 GLuint m_samplers[NumTextureUnits];

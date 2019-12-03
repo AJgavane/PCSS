@@ -28,11 +28,41 @@ void initTexutures();
 
 void perspectiveFrustum(const glm::mat4& proj, float width, float height, float near, float far);
 
+inline glm::vec3 transformCoord(const glm::mat4 &m, const glm::vec3 &v)
+{
+	glm::vec4 r = m * glm::vec4(v, 1.0);
+	float oow = r.w == 0.0 ? 1.0 : (1.0 / r.w);
+	return glm::vec3(r) * oow;
+}
+
+inline void transformBoundingBox(glm::vec3 bbox2[2], const glm::vec3 bbox1[2], const glm::mat4x4 &matrix)
+{
+	bbox2[0][0] = bbox2[0][1] = bbox2[0][2] = std::numeric_limits<float>::max();
+	bbox2[1][0] = bbox2[1][1] = bbox2[1][2] = -std::numeric_limits<float>::max();
+	// Transform the vertices of BBox1 and extend BBox2 accordingly
+	for (int i = 0; i < 8; ++i)
+	{
+		glm::vec3 v(
+			bbox1[(i & 1) ? 0 : 1][0],
+			bbox1[(i & 2) ? 0 : 1][1],
+			bbox1[(i & 4) ? 0 : 1][2]);
+
+		glm::vec3 v1 = transformCoord(matrix, v);
+		for (int j = 0; j < 3; ++j)
+		{
+			bbox2[0][j] = std::min(bbox2[0][j], v1[j]);
+			bbox2[1][j] = std::max(bbox2[1][j], v1[j]);
+		}
+	}
+}
+
 int main(int args, char** argv)
 {
     float dTheta = 0.01; int rotAngle = 45;
 
 	Model floor("./res/models/floor/floor.obj");
+	printVec("Floor Center: ", floor.GetCenter());
+	printVec("Floor Extent: ", floor.GetExtent());
     glm::mat4 modelFloor;
     modelFloor = glm::scale(modelFloor, glm::vec3(01.0f));	// it's a bit too big for our scene, so scale it down
     modelFloor = glm::translate(modelFloor, glm::vec3(0.00f, -1.00f, 1.00f));
@@ -41,7 +71,7 @@ int main(int args, char** argv)
 	Model palm;
 	int model_number = ModelName::LUCY_100K;
 	CountNumberOfPoints = !true; debug = !true;
-	runtime = true; avgNumFrames = 125; csv = true;  //dTheta = 0;
+	runtime = true; avgNumFrames = 125; csv = true; // dTheta = 0;
     switch (model_number)
     {
 	case ModelName::BREAKFASTROOM:
@@ -53,6 +83,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(8.92292, 9.14627, 2.88979);
 		cameraPosition =cameraDefaultPosition;
 		lookAt = lookAtDefault;
+		LIGHT_SIZE = 5.0f;
 		break;
 	case ModelName::TRIANGLE:
 		// 1 triangle
@@ -131,8 +162,9 @@ int main(int args, char** argv)
 		modelPalm = glm::translate(modelPalm, glm::vec3(0.00f, -0.810f, -2.00)); //for lucy
 		modelPalm = glm::scale(modelPalm, glm::vec3(0.00075f));	// for lucy
 		modelPalm = glm::rotate(modelPalm, 1.30f, glm::vec3(0.0f, 1.0f, 0.0f));
-		lightPosition = glm::vec3(-0.0f, 0.70f, 2.50f);
-		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
+		lightPosition = glm::vec3(0.0f, 1.0f, 2.0f);
+		//lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
+		lightLookAt = glm::vec3(0.0f, 0.0f, 0.0f);
 		cameraPosition = glm::vec3(0.530f, 0.210f, -1.0f);
 		lookAt = glm::vec3(-4.3f, -5.9f, -11.3f);
 		bbox = 0.75f;
@@ -184,7 +216,7 @@ int main(int args, char** argv)
 		palm.LoadMeshModel("./res/models/buddha/buddha.obj");
 		modelPalm = glm::translate(modelPalm, glm::vec3(-0.50f, -0.63f, -0.70f)); 
 		modelPalm = glm::scale(modelPalm, glm::vec3(0.40f));	
-		modelPalm = glm::rotate(modelPalm, 1.30f, glm::vec3(0.0f, 1.0f, 0.0f));
+		modelPalm = glm::rotate(modelPalm, -2.90f, glm::vec3(0.0f, 1.0f, 0.0f));
 		lightPosition = glm::vec3(-0.0f, 0.250f, 2.50f);
 		lightLookAt = glm::vec3(-2.2f, -5.10f, -13.70f);
 		cameraPosition = glm::vec3(0.042, -0.054, -0.218);
@@ -241,19 +273,35 @@ int main(int args, char** argv)
 		break;
     }
 
-
+	printVec("Model Center: ", modelPalm * glm::vec4(palm.GetCenter(),1.0));
+	printVec("Model Extent: ", modelPalm * glm::vec4(palm.GetExtent(),1.0));
 	initRendering();
 	Shader basicShader("./res/basic.vs", "./res/basic.fs");
 	basicShader.use(); basicShader.disable();
 
 	// Light constants
-	Camera altCamera(lightPosition, lightFOV, (float)SHADOW_WIDTH, (float)SHADOW_HEIGHT, l_zNear, zFar, lightLookAt, 2.0f);
+	Camera altCamera(lightPosition, lightFOV, (float)SHADOW_WIDTH, (float)SHADOW_HEIGHT, 1.0f, zFar, lightLookAt, bbox);
 
 	glm::mat4 lightView = altCamera.GetView();
-	glm::mat4 lightProj = altCamera.GetPerspProj();
-	l_zNear = 1.0f / tan(lightFOV / 2.0f);
+	glm::vec3 center = palm.GetCenter();
+	glm::vec3 extents = palm.GetExtent();
+	glm::vec3 box[2];
+	box[0] = center - extents;
+	box[1] = center + extents;
+	glm::vec3 bboxScaled[2];
+	transformBoundingBox(bboxScaled, box, lightView * modelPalm);
+	
+	/*FrustumWidth = std::max(fabs(bboxScaled[0][0]), fabs(bboxScaled[1][0])) * 2.0f;
+	FrustumHeight = std::max(fabs(bboxScaled[0][1]), fabs(bboxScaled[1][1])) * 2.0f;*/
+	l_zNear = -bboxScaled[1][2];
+	//LIGHT_SIZE /= FrustumWidth;
 	std::cout << "FW/FH: " << FrustumWidth << std::endl;
-	//glm::mat4 lightProj = glm::frustum(-bbox, bbox, -bbox, bbox, l_zNear, zFar);
+	std::cout << "l_zNear: " << l_zNear << std::endl;
+	std::cout << "LIGHT_SIZE: " << LIGHT_SIZE << std::endl;
+	bbox = 1.0;
+	glm::mat4 lightProj = altCamera.GetPerspProj();
+	//glm::mat4 lightProj = glm::frustum(-FrustumWidth/2, FrustumWidth/2, -FrustumHeight/2, FrustumHeight/2, l_zNear, zFar);
+	float LIGHT_SIZE = 0.003f;
 	glm::mat4 lightViewProj = lightProj * lightView;
 	glm::mat4 biasMatrix(
 		0.5, 0.0, 0.0, 0.0,
@@ -291,7 +339,7 @@ int main(int args, char** argv)
 	pcss.setMat4("u_lightView", lightView);
 	pcss.setFloat("u_light_zNear", l_zNear);
 	pcss.setFloat("u_light_zFar", zFar);
-	pcss.setVec2("u_lightRadiusUV", glm::vec2(LIGHT_SIZE/FrustumWidth));
+	pcss.setVec2("u_lightRadiusUV", glm::vec2(LIGHT_SIZE));
 	pcss.setInt("u_samplePattern", SamplePattern::POISSON_25_25);
 	pcss.disable();
 	
@@ -385,6 +433,7 @@ int main(int args, char** argv)
 					pcss.setMat4("u_projection", projection);
 					BindFBOForReading(2);
 					pcss.setInt("u_shadowMap", 2);
+					pcss.setInt("u_shadowMapPcf", 3);
 					pcss.setMat4("u_model", modelPalm);
 					palm.Draw(pcss);
 					pcss.setMat4("u_model", modelFloor);
@@ -410,6 +459,11 @@ int main(int args, char** argv)
 
 	glDeleteFramebuffers(1, &m_shadowMapFBO);
 	glDeleteTextures(1, &depthTexture);
+	for(int i = 0; i < NumTextureUnits; i++)
+	{
+		glDeleteTextures(1, &m_textures[i]);
+		glDeleteTextures(1, &m_samplers[i]);
+	}
     return 0;
 }
 
@@ -484,17 +538,19 @@ bool initShadowMap(int unit)
 				// Setup the shadowmap depth sampler
 				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-				float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-				glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				//glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+				//glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+				//float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+				//glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
 				// Setup the shadowmap PCF sampler
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				//    glSamplerParameterfv(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_BORDER_COLOR, borderColor);
+				//glSamplerParameterfv(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_BORDER_COLOR, borderColor);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 
@@ -510,12 +566,18 @@ bool initShadowMap(int unit)
 					return false;
 				m_textures[ShadowPcfTextureUnit] = m_textures[ShadowDepthTextureUnit];
 				glBindTexture(GL_TEXTURE_2D, m_textures[ShadowDepthTextureUnit]);
-				glTexStorage2D(	GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, WIDTH, HEIGHT);
-
+				glTexStorage2D(	GL_TEXTURE_2D, 1, GL_DEPTH_COMPONENT32F, SHADOW_WIDTH, SHADOW_HEIGHT);
+				/*glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
+*/
 				// Add the shadowmap texture to the framebuffer
 				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_textures[ShadowDepthTextureUnit], 0);
 				glDrawBuffer(GL_NONE);
-				glReadBuffer(GL_NONE);
+				//glReadBuffer(GL_NONE);
 				if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 					return false;
 
@@ -536,10 +598,12 @@ void BindFBOForWriting()
 
 void BindFBOForReading(GLenum TextureUnit)
 {
-	glActiveTexture(GL_TEXTURE0 + TextureUnit);
-	//glBindTexture(GL_TEXTURE_2D, depthTexture);
-	glBindTexture(GL_TEXTURE_2D, m_textures[ShadowDepthTextureUnit]);
-	glBindSampler(TextureUnit, m_samplers[ShadowPcfTextureUnit]);
+	for (GLuint unit = TextureUnit; unit < TextureUnit + NumTextureUnits; ++unit)
+	{
+		glActiveTexture(GL_TEXTURE0 + unit);
+		glBindTexture(GL_TEXTURE_2D, m_textures[unit]);
+		glBindSampler(unit, m_samplers[unit]);
+	}
 }
 
 void DrawQuadGL()
