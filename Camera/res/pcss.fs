@@ -12,8 +12,8 @@ uniform sampler2D texture_specular1;
 uniform sampler2D texture_normal1;
 
 uniform int u_samplePattern;
-uniform mediump sampler2D u_shadowMap;
-uniform mediump sampler2DShadow u_shadowMapPcf;
+layout(binding = 2) uniform mediump sampler2D u_shadowMap;
+layout(binding = 3) uniform mediump sampler2DShadow u_shadowMapPcf;
 
 uniform vec3 u_lightPosition;
 uniform mat4 u_lightView;
@@ -402,6 +402,17 @@ const vec2 Poisson128[128] = vec2[](
     vec2(0.972032, 0.2271516)
 );
 
+float random(vec3 seed, int i){
+    vec4 seed4 = vec4(seed,i);
+    float dot_product = dot(seed4, vec4(12.9898,78.233,45.164,94.673));
+    return fract(sin(dot_product) * 43758.5453);
+}
+
+vec2 Rotate(vec2 pos, vec2 rotationTrig)
+{
+    return vec2(pos.x * rotationTrig.x - pos.y * rotationTrig.y, pos.y * rotationTrig.x + pos.x * rotationTrig.y);
+}
+
 bool isBlack(vec3 c)
 {
     return (dot(c, c) == 0.0);
@@ -409,7 +420,7 @@ bool isBlack(vec3 c)
 
 float biasedZ(float z0, vec2 dz_duv, vec2 offset)
 {
-    return z0 - dot(dz_duv, offset);
+    return z0 + dot(dz_duv, offset);
 }
 
 float zClipToEye(float z)
@@ -420,7 +431,7 @@ float zClipToEye(float z)
 float borderDepthTexture(sampler2D tex, vec2 uv)
 {
 	return ((uv.x <= 1.0) && (uv.y <= 1.0) && (uv.x >= 0.0) && (uv.y >= 0.0)) 
-			? texture(tex, uv).z : 1.0;
+			? textureLod(tex, uv,0.0).z : 1.0;
 }
 
 float borderPCFTexture(sampler2DShadow tex, vec3 uvz)
@@ -481,11 +492,11 @@ vec4 shading(vec3 worldPos, vec3 normal, float visibility)
 	vec3 diffuse = diff * MaterialDiffuseColor;
     vec3 reflectDir = reflect(-lightDir, normal);
 	vec3 viewDir = normalize(u_eye - fs_in.WorldPos.xyz);
-	float spec = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), 64.0);
+	float spec = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), 32.0);
 	vec3 specular = spec * MaterialSpecularColor;
 
 	vec3 result = ambient + visibility * (diffuse + specular); 
-	return vec4(result,1.0);
+	return vec4(result, 1.0);
 }
 
 vec4 pcssShading(vec3 worldPos, vec3 normal)
@@ -518,7 +529,12 @@ void findBlocker(
             maxBlockers = 25.0;
             for (int i = 0; i < 25; ++i)
             {
-                vec2 offset = Poisson25[i] * searchRegionRadius;
+                float rotationAngle = random(gl_FragCoord.xyy, i) * 3.1415926;
+                vec2 rotationTrig = vec2(cos(rotationAngle), sin(rotationAngle));
+                // int index = int(16.0*random(gl_FragCoord.xyy, i))%25;
+                int index = int(25.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%25;
+                vec2 offset = Poisson25[index] * searchRegionRadius;
+                offset =  Rotate(offset, rotationTrig);
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
                 float z = biasedZ(z0, dz_duv, offset);
                 if (shadowMapDepth < z)
@@ -569,7 +585,9 @@ void findBlocker(
             maxBlockers = 64.0;
             for (int i = 0; i < 64; ++i)
             {
-                vec2 offset = Poisson64[i] * searchRegionRadius;
+                int index = int(64.0*random(gl_FragCoord.xyy, i))%64;
+                //int index = int(16.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%64;
+                vec2 offset = Poisson64[index] * searchRegionRadius;
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
                 float z = biasedZ(z0, dz_duv, offset) - EPSILON;
                 if (shadowMapDepth < z)
@@ -591,7 +609,7 @@ void findBlocker(
                 {
                     vec2 offset = vec2(x, y) * stepUV;
                     float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
-                    float z = biasedZ(z0, dz_duv, offset) - EPSILON;
+                    float z = biasedZ(z0, dz_duv, offset);
                     if (shadowMapDepth < z)
                     {
                         accumBlockerDepth += shadowMapDepth;
@@ -614,12 +632,25 @@ float pcfFilter (vec2 uv, float z0, vec2 dz_duv, vec2 filterRadiusUV)
         {
             for (int i = 0; i < 25; ++i)
             {
+               
                 vec2 offset = Poisson25[i] * filterRadiusUV;
                 float z = biasedZ(z0, dz_duv, offset);
-              //  float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
                 sum +=  borderPCFTexture(u_shadowMapPcf, vec3(uv + offset, z));
             }
-            return sum / 25.0;
+            return sum / 25.0;            
+    
+            // float numBlockers = 0.0;
+            // for (int i = 0; i < 25; ++i)
+            // {
+            //     vec2 offset = Poisson25[i] * filterRadiusUV;
+            //     float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
+            //     float z = biasedZ(z0, dz_duv, offset);
+            //     if (shadowMapDepth < z)
+            //     {
+            //         numBlockers+=1.0;
+            //     }                
+            // }
+            // return 1 -numBlockers/25.0;
         }
 
         case POISSON_32_64:
@@ -684,10 +715,11 @@ vec2 SearchWidth(vec2 uvLightSize, float receiverDistance)
 
 float pcssShadow(vec2 uv, float currentDepth_atXY, vec2 dz_duv, float zEye)
 {
+  
     // Blocker
     float shadow = 1.0;
     float accumBlockerDepth, numBlockers, maxBlockers;
-	vec2 searchWidth =  searchRegionRadiusUV(zEye);
+	vec2 searchWidth = searchRegionRadiusUV(zEye);
     findBlocker(accumBlockerDepth, numBlockers, maxBlockers, uv, currentDepth_atXY, dz_duv, searchWidth);
     
     if(numBlockers ==  0.0)
@@ -696,10 +728,11 @@ float pcssShadow(vec2 uv, float currentDepth_atXY, vec2 dz_duv, float zEye)
     // penumbra
     float avgBlockerDepth =  accumBlockerDepth/numBlockers;
     float avgBlockerDepthWorld = zClipToEye(avgBlockerDepth);
-    vec2 penumbraWidth = penumbraRadiusUV(zEye, avgBlockerDepthWorld);// u_lightRadiusUV *  vec2((zEye - avgBlockerDepthWorld) / zEye);
-    vec2 filterRadius = projectToLightUV(penumbraWidth, zEye);
+    vec2 penumbraWidth = penumbraRadiusUV(-zEye, avgBlockerDepthWorld);// u_lightRadiusUV *  vec2((zEye - avgBlockerDepthWorld) / zEye);
+    vec2 filterRadius =  projectToLightUV(penumbraWidth, zEye);
 
     return pcfFilter(uv, currentDepth_atXY, dz_duv, filterRadius);;
+    // return avgBlockerDepth;
 }
 
 float PCFShadow(vec2 uv, float z0, vec2 dz_duv, float zEye)
@@ -775,8 +808,18 @@ void main()
             case 3:
                 shadow = PCFShadow(uv, currentDepth_atXY, dz_duv, zEye);
                 break;
+            case 4:
+                 float z =  borderDepthTexture(u_shadowMap, uv );
+                 if( z < currentDepth_atXY - EPSILON)
+                    z = 0.0;
+                // float color = (zClipToEye(z) - u_light_zNear) / (u_light_zFar - u_light_zNear);
+                // FragColor = vec4(color, color, color, 1.0);
+                // float z = borderPCFTexture(u_shadowMapPcf, vec3(uv, currentDepth_atXY));
+                FragColor = vec4(z, z, z, 1.0);
+                return;
+                break;
         }
-        //FragColor = pcssShading(fs_in.WorldPos.xyz, fs_in.Normal) * shadow;
+        // FragColor = pcssShading(fs_in.WorldPos.xyz, fs_in.Normal) * shadow;
          FragColor = shading(fs_in.WorldPos.xyz, fs_in.Normal, shadow);
     }
 }

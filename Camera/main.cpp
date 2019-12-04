@@ -26,7 +26,7 @@ void DrawQuadGL();
 void initRendering();
 void initTexutures();
 
-void perspectiveFrustum(const glm::mat4& proj, float width, float height, float near, float far);
+glm::mat4 perspectiveFrustum(glm::mat4& proj, float width, float height, float near, float far);
 
 inline glm::vec3 transformCoord(const glm::mat4 &m, const glm::vec3 &v)
 {
@@ -74,7 +74,7 @@ int main(int args, char** argv)
 	Model palm;
 	int model_number = ModelName::LUCY_2M;
 	CountNumberOfPoints = !true; debug = !true;
-	runtime = true; avgNumFrames = 125; csv = true;  dTheta = 0;
+	runtime = true; avgNumFrames = 200; csv = true;  dTheta = 0;
     switch (model_number)
     {
 	case ModelName::BREAKFASTROOM:
@@ -86,7 +86,7 @@ int main(int args, char** argv)
 		lightLookAt = glm::vec3(8.92292, 9.14627, 2.88979);
 		cameraPosition =cameraDefaultPosition;
 		lookAt = lookAtDefault;
-		LIGHT_SIZE = 5.0f;
+		//LIGHT_SIZE = 5.0f;
 		break;
 	case ModelName::TRIANGLE:
 		// 1 triangle
@@ -286,6 +286,9 @@ int main(int args, char** argv)
 	// Light constants
 	//Camera altCamera(lightPosition, lightFOV, (float)SHADOW_WIDTH, (float)SHADOW_HEIGHT, 1.0f, zFar, lightLookAt, bbox);
 
+	//lightPosition = lightPosition + glm::vec3(0, -0.4, 1.0);
+	//lightLookAt = glm::vec3(-2.82505, -6.04152, -12.8307);
+
 	
 	glm::mat4 lightView =glm::lookAt(lightPosition, lightLookAt, glm::vec3(0.0f, 1.0f, 0.0f));  //altCamera.GetView();
 	glm::vec3 center = palm.GetCenter();
@@ -297,15 +300,14 @@ int main(int args, char** argv)
 	transformBoundingBox(bboxScaled, box, lightView * modelPalm);
 	
 	FrustumWidth = std::max(fabs(bboxScaled[0][0]), fabs(bboxScaled[1][0])) * 2.0f;
-	FrustumHeight = FrustumWidth; // std::max(fabs(bboxScaled[0][1]), fabs(bboxScaled[1][1])) * 2.0f;//*/
+	FrustumHeight =  std::max(fabs(bboxScaled[0][1]), fabs(bboxScaled[1][1])) * 2.0f;//*/
 	l_zNear = -bboxScaled[1][2];
 	//LIGHT_SIZE /= FrustumWidth;
 	std::cout << "FW/FH: " << FrustumWidth << std::endl;
 	std::cout << "l_zNear: " << l_zNear << std::endl;
 	std::cout << "LIGHT_SIZE: " << LIGHT_SIZE << std::endl;
-	bbox = 1.0;
 	glm::mat4 lightProj = glm::perspective(lightFOV, 1.0f, 1.0f, zFar);
-	//glm::mat4 lightProj = glm::frustum(-FrustumWidth/2, FrustumWidth/2, -FrustumHeight/2, FrustumHeight/2, 2.0f, zFar);
+	//lightProj = perspectiveFrustum(lightProj, FrustumWidth, FrustumHeight, l_zNear, zFar);
 	glm::mat4 lightViewProj = lightProj * lightView;
 	glm::mat4 biasMatrix(
 		0.5, 0.0, 0.0, 0.0,
@@ -316,11 +318,12 @@ int main(int args, char** argv)
 
 	glm::mat4 depthBiasMVP = biasMatrix * lightViewProj;
 	glm::mat4 invLightView = glm::inverse(lightView);
-//	lightPosition = transformCoord(invLightView, lightPosition);
+	//lightPosition = invLightView * glm::vec4(lightPosition, 1.0);;
 	printVec("....Light Position: ", lightPosition);
 
 	glm::mat4 ModelLight;
 	Model light("./res/models/square/square.obj");
+	ModelLight = glm::mat4();
 	ModelLight = glm::scale(ModelLight, glm::vec3(LIGHT_SIZE, LIGHT_SIZE, 1.0f));	// it's a bit too big for our scene, so scale it down
 	ModelLight = glm::translate(ModelLight, lightPosition);
 	//printVec("light Center: ", ModelLight * glm::vec4(light.GetCenter(), 1.0));
@@ -365,6 +368,11 @@ int main(int args, char** argv)
 	lastTime = SDL_GetTicks();
 	// Render:
     while (!display.isClosed()) {
+		if (printCameraCoord) {
+			printVec("Camera: ", cameraPosition);
+			printVec("Look@: ", lookAt);
+			printCameraCoord = false;
+		}
 		numFrames++;
         glFinish();
         handleKeys();
@@ -441,6 +449,10 @@ int main(int args, char** argv)
 			}
 			else 
 			{
+				ModelLight = glm::mat4();
+				ModelLight = glm::translate(ModelLight, lightPosition);
+//				ModelLight = glm::translate(ModelLight, -light.GetCenter());
+				ModelLight = glm::scale(ModelLight, glm::vec3(LIGHT_SIZE, LIGHT_SIZE, 0.0f));	// it's a bit too big for our scene, so scale it down
 				//glDepthFunc(GL_EQUAL);
 				glViewport(0, 0, WIDTH, HEIGHT);
 				pcss.use();
@@ -448,14 +460,15 @@ int main(int args, char** argv)
 					pcss.setVec3("u_eye", cameraPosition);
 					pcss.setMat4("u_depthBiasMVP", depthBiasMVP);
 					pcss.setMat4("u_view", view);
+					pcss.setVec2("u_lightRadiusUV", glm::vec2(LIGHT_SIZE));
 					pcss.setMat4("u_projection", projection);
 					BindFBOForReading(2);
 					pcss.setInt("u_shadowMap", 2);
 					pcss.setInt("u_shadowMapPcf", 3);
-					pcss.setMat4("u_model", modelPalm);
-					palm.Draw(pcss);
 					pcss.setMat4("u_model", modelFloor);
 					floor.Draw(pcss);
+					pcss.setMat4("u_model", modelPalm);
+					palm.Draw(pcss);					
 					pcss.setMat4("u_model", ModelLight);
 					pcss.setBool("u_IsLightSrc", true);
 					light.Draw(pcss);
@@ -497,9 +510,9 @@ void initRendering()
 	std::cout << "depth Bits: " << depthBits << std::endl;
 
 	glGenSamplers(NumTextureUnits, m_samplers);
-	for (GLuint unit = 2; unit < 2 + NumTextureUnits; ++unit)
+	for (GLuint unit = 0; unit < NumTextureUnits; ++unit)
 	{
-		glBindSampler(unit, m_samplers[unit]);
+		glBindSampler(unit + 2, m_samplers[unit]);
 	}
 	
 	auto status = initShadowMap(1);
@@ -566,8 +579,8 @@ bool initShadowMap(int unit)
 				glGetIntegerv(GL_FRAMEBUFFER, (GLint*)&prevFBO);
 
 				// Setup the shadowmap depth sampler
-				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 				//glSamplerParameteri(m_samplers[ShadowDepthTextureUnit], GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
@@ -578,8 +591,8 @@ bool initShadowMap(int unit)
 				//glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
 
 				// Setup the shadowmap PCF sampler
-				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glSamplerParameteri(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 				//glSamplerParameterfv(m_samplers[ShadowPcfTextureUnit], GL_TEXTURE_BORDER_COLOR, borderColor);
@@ -648,6 +661,44 @@ void BindFBOForReading(GLenum TextureUnit)
 	}
 }
 
+
+glm::mat4 frustum(glm::mat4& proj, float l, float r, float b, float t, float n, float f)
+{
+	proj[0][0] = 2.0f * n / (r - l);
+	proj[1][0] = 0.0;
+	proj[2][0] = 0.0;
+	proj[3][0] = 0.0;
+
+	proj[0][1] = 0.0;
+	proj[1][1] = (2.0f)*n / (t - b);
+	proj[2][1] = 0.0;
+	proj[3][1] = 0.0;
+
+	proj[0][2] = (r + l) / (r - l);
+	proj[1][2] = (t + b) / (t - b);
+	proj[2][2] = -(f + n) / (f - n);
+	proj[3][2] = -1.0f;
+
+	proj[0][3] = 0.0;
+	proj[1][3] = 0.0;
+	proj[2][3] = -2.0f*f*n / (f - n);
+	proj[3][3] = 0.0;
+
+	return proj;
+}
+
+glm::mat4 perspectiveFrustum(glm::mat4& proj, float width, float height, float near, float far)
+{
+	float ymax = height / 2.0f;
+	float ymin = -ymax;
+
+	float aspect = width / height;
+	float xmin = ymin * aspect;
+	float xmax = ymax * aspect;
+
+	return frustum(proj, xmin, xmax, ymin, ymax, near, far);
+}
+
 void DrawQuadGL()
 {
 	if (quadVAO == 0)
@@ -712,5 +763,4 @@ void printMatrix(glm::mat4 M) {
         }
         std::cout << std::endl;
     }
-    std::cout << std::endl;
 }

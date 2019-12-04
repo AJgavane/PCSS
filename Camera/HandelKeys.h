@@ -17,8 +17,18 @@ void handleKeys() {
 				cameraPosition = cameraPosition + front;
 				lookAt = lookAt + front;
 				break;
+			case SDLK_UP :
+				front = glm::normalize(lookAt - cameraPosition) * dt * 0.1f;
+				cameraPosition = cameraPosition + front;
+				lookAt = lookAt + front;
+				break;
 			case SDLK_s:
 				front = glm::normalize(lookAt - cameraPosition) * dt;
+				cameraPosition = cameraPosition - front;
+				lookAt = lookAt - front;
+				break;
+			case SDLK_DOWN:
+				front = glm::normalize(lookAt - cameraPosition) * dt * 0.1f;
 				cameraPosition = cameraPosition - front;
 				lookAt = lookAt - front;
 				break;
@@ -27,8 +37,18 @@ void handleKeys() {
 				cameraPosition = cameraPosition - side;
 				lookAt = lookAt - side;
 				break;
+			case SDLK_LEFT:
+				side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0))) * dt * 0.1f;
+				cameraPosition = cameraPosition - side;
+				lookAt = lookAt - side;
+				break;
 			case SDLK_d:
 				side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0))) * dt;
+				cameraPosition = cameraPosition + side;
+				lookAt = lookAt + side;
+				break;
+			case SDLK_RIGHT:
+				side = glm::normalize(glm::cross(front, glm::vec3(0, 1, 0))) * dt * 0.1f;
 				cameraPosition = cameraPosition + side;
 				lookAt = lookAt + side;
 				break;
@@ -93,6 +113,14 @@ void handleKeys() {
 				break;
 			case SDLK_h:
 				CountNumberOfPoints = !CountNumberOfPoints;
+				break;
+			case SDLK_f:
+				if(LIGHT_SIZE + LIGHT_STEP_SIZE <= 20*LIGHT_STEP_SIZE)
+					LIGHT_SIZE += LIGHT_STEP_SIZE;
+				break;
+			case SDLK_g:
+				if(LIGHT_SIZE - LIGHT_STEP_SIZE >= 0.0)
+					LIGHT_SIZE -= LIGHT_STEP_SIZE;
 				break;
 			default:
 				break;
