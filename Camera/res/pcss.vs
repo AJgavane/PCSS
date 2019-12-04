@@ -17,6 +17,7 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 uniform mat4 u_depthBiasMVP;
 
+
 void main()
 {
 	vs_out.WorldPos = u_model * vec4(position, 1.0);

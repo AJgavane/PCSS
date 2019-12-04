@@ -98,7 +98,7 @@ glm::vec3 lightLookAt(5.2f, -12.50f, -16.0f);
 glm::vec3 defaultLightPosition(5.0f, 10.0f, 10.0f);
 float lightFOV = glm::radians(45.0f);
 float l_zNear = 01.0f;
-float LIGHT_SIZE = 0.010f;
+float LIGHT_SIZE = 0.01f;
 float FrustumWidth = 2 * std::tanf(lightFOV * 0.5f);
 float FrustumHeight = FrustumWidth;
 glm::vec3 Lfront = glm::normalize(lightPosition - lightLookAt);
@@ -127,8 +127,8 @@ ShadowTechnique m_shadowTechnique;
 
 GLuint depthTexture;
 
-static const GLint ShadowDepthTextureUnit = 2;
-static const GLint ShadowPcfTextureUnit = 3;
+static const GLint ShadowDepthTextureUnit = 0;
+static const GLint ShadowPcfTextureUnit = 1;
 static const GLint NumTextureUnits = 2;
 
 GLuint m_samplers[NumTextureUnits];
