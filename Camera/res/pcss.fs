@@ -479,12 +479,12 @@ vec2 depthGradient(vec2 uv, float z)
 
 vec4 shading(vec3 worldPos, vec3 normal, float visibility)
 {
-	// vec3 MaterialDiffuseColor = texture(texture_diffuse1, fs_in.TexCoord).rgb;
-	// vec3 MaterialAmbientColor = vec3(0.2);
-	// vec3 MaterialSpecularColor =texture(texture_specular1, fs_in.TexCoord).rgb;
-    vec3 MaterialDiffuseColor = vec3(0.7); //texture(texture_diffuse1, fs_in.TexCoord ).rgb;
-    vec3 MaterialAmbientColor = vec3(0.3);// * MaterialDiffuseColor;
-    vec3 MaterialSpecularColor = vec3(0.2);
+	vec3 MaterialDiffuseColor = texture(texture_diffuse1, fs_in.TexCoord).rgb;
+	vec3 MaterialAmbientColor = vec3(0.2);
+	vec3 MaterialSpecularColor =texture(texture_specular1, fs_in.TexCoord).rgb;
+    // vec3 MaterialDiffuseColor = vec3(0.7); //texture(texture_diffuse1, fs_in.TexCoord ).rgb;
+    // vec3 MaterialAmbientColor = vec3(0.3);// * MaterialDiffuseColor;
+    // vec3 MaterialSpecularColor = vec3(0.2);
 	
     vec3 lightDir = normalize(u_lightPosition - fs_in.WorldPos.xyz);
     vec3 ambient = MaterialAmbientColor * MaterialDiffuseColor;
@@ -589,7 +589,7 @@ void findBlocker(
                 //int index = int(16.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%64;
                 vec2 offset = Poisson64[index] * searchRegionRadius;
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
-                float z = biasedZ(z0, dz_duv, offset) - EPSILON;
+                float z = biasedZ(z0, dz_duv, offset) - 0.01;
                 if (shadowMapDepth < z)
                 {
                     accumBlockerDepth += shadowMapDepth;
@@ -728,7 +728,7 @@ float pcssShadow(vec2 uv, float currentDepth_atXY, vec2 dz_duv, float zEye)
     // penumbra
     float avgBlockerDepth =  accumBlockerDepth/numBlockers;
     float avgBlockerDepthWorld = zClipToEye(avgBlockerDepth);
-    vec2 penumbraWidth = penumbraRadiusUV(-zEye, avgBlockerDepthWorld);// u_lightRadiusUV *  vec2((zEye - avgBlockerDepthWorld) / zEye);
+    vec2 penumbraWidth = penumbraRadiusUV(zEye, avgBlockerDepthWorld);// u_lightRadiusUV *  vec2((zEye - avgBlockerDepthWorld) / zEye);
     vec2 filterRadius =  projectToLightUV(penumbraWidth, zEye);
 
     return pcfFilter(uv, currentDepth_atXY, dz_duv, filterRadius);;

@@ -72,7 +72,7 @@ int main(int args, char** argv)
 	
     glm::mat4 modelPalm;
 	Model palm;
-	int model_number = ModelName::LUCY_2M;
+	int model_number = ModelName::DRAGON;
 	CountNumberOfPoints = !true; debug = !true;
 	runtime = true; avgNumFrames = 200; csv = true;  dTheta = 0;
     switch (model_number)
@@ -80,13 +80,25 @@ int main(int args, char** argv)
 	case ModelName::BREAKFASTROOM:
 		palm.LoadMeshModel("./res/models/breakfast_room/breakfast_room.obj");
 		modelPalm = glm::translate(modelPalm, glm::vec3(0.00f, 0.60f, 0.0)); //for cube
-		modelPalm = glm::scale(modelPalm, glm::vec3(1.0f));	// for cube
+		modelPalm = glm::scale(modelPalm, glm::vec3(1.0f));
 		//modelPalm = glm::rotate(modelPalm, -2.30f, glm::vec3(0.0f, 1.0f, 0.0f));
 		lightPosition = glm::vec3(23.6953, 15.1463, 0.946266);
 		lightLookAt = glm::vec3(8.92292, 9.14627, 2.88979);
 		cameraPosition =cameraDefaultPosition;
 		lookAt = lookAtDefault;
-		//LIGHT_SIZE = 5.0f;
+		break;
+	case ModelName::DRAGON:
+		palm.LoadMeshModel("./res/models/dragon/dragon_2M.obj");
+		modelPalm = glm::translate(modelPalm, -palm.GetCenter());
+		modelPalm = glm::scale(modelPalm, glm::vec3(1.50f));
+		modelPalm = glm::translate(modelPalm, palm.GetCenter());
+		modelPalm = glm::translate(modelPalm, glm::vec3(00.0f, -palm.GetExtent().y - 0.1, 0.0f));
+		modelPalm = glm::rotate(modelPalm, -2.30f, glm::vec3(0.0f, 1.0f, 0.0f));
+		//modelPalm = glm::rotate(modelPalm, -2.30f, glm::vec3(0.0f, 1.0f, 0.0f));
+		lightPosition = glm::vec3(4.37894, 4.64508, -5.86765);
+		lightLookAt = glm::vec3(0.0f);
+		cameraPosition = glm::vec3(1.213, 1.277, 0.943);
+		lookAt = glm::vec3(-2.091, -3.895, -0.457);
 		break;
 	case ModelName::TRIANGLE:
 		// 1 triangle
@@ -288,9 +300,14 @@ int main(int args, char** argv)
 
 	//lightPosition = lightPosition + glm::vec3(0, -0.4, 1.0);
 	//lightLookAt = glm::vec3(-2.82505, -6.04152, -12.8307);
+	glm::mat4 ModelLight;
+	Model light("./res/models/square/square.obj");
+	ModelLight = glm::mat4();
+	ModelLight = glm::scale(ModelLight, glm::vec3(LIGHT_SIZE, LIGHT_SIZE, 1.0f));	// it's a bit too big for our scene, so scale it down
+	ModelLight = glm::translate(ModelLight, lightPosition);
+	printVec("....Light Position: ", lightPosition);
 
-	
-	glm::mat4 lightView =glm::lookAt(lightPosition, lightLookAt, glm::vec3(0.0f, 1.0f, 0.0f));  //altCamera.GetView();
+	glm::mat4 lightView = glm::lookAt(lightPosition, lightLookAt, glm::vec3(0.0f, 1.0f, 0.0f));  //altCamera.GetView();
 	glm::vec3 center = palm.GetCenter();
 	glm::vec3 extents = palm.GetExtent();
 	glm::vec3 box[2];
@@ -301,12 +318,11 @@ int main(int args, char** argv)
 	
 	FrustumWidth = std::max(fabs(bboxScaled[0][0]), fabs(bboxScaled[1][0])) * 2.0f;
 	FrustumHeight =  std::max(fabs(bboxScaled[0][1]), fabs(bboxScaled[1][1])) * 2.0f;//*/
-	l_zNear = -bboxScaled[1][2];
+	l_zNear = -bboxScaled[1][2] - 0.2;
 	//LIGHT_SIZE /= FrustumWidth;
-	std::cout << "FW/FH: " << FrustumWidth << std::endl;
 	std::cout << "l_zNear: " << l_zNear << std::endl;
 	std::cout << "LIGHT_SIZE: " << LIGHT_SIZE << std::endl;
-	glm::mat4 lightProj = glm::perspective(lightFOV, 1.0f, 1.0f, zFar);
+	glm::mat4 lightProj = glm::perspective(lightFOV, 1.0f, l_zNear, zFar);
 	//lightProj = perspectiveFrustum(lightProj, FrustumWidth, FrustumHeight, l_zNear, zFar);
 	glm::mat4 lightViewProj = lightProj * lightView;
 	glm::mat4 biasMatrix(
@@ -317,15 +333,10 @@ int main(int args, char** argv)
 	);
 
 	glm::mat4 depthBiasMVP = biasMatrix * lightViewProj;
-	glm::mat4 invLightView = glm::inverse(lightView);
+	//glm::mat4 invLightView = glm::inverse(lightView);
 	//lightPosition = invLightView * glm::vec4(lightPosition, 1.0);;
-	printVec("....Light Position: ", lightPosition);
 
-	glm::mat4 ModelLight;
-	Model light("./res/models/square/square.obj");
-	ModelLight = glm::mat4();
-	ModelLight = glm::scale(ModelLight, glm::vec3(LIGHT_SIZE, LIGHT_SIZE, 1.0f));	// it's a bit too big for our scene, so scale it down
-	ModelLight = glm::translate(ModelLight, lightPosition);
+	
 	//printVec("light Center: ", ModelLight * glm::vec4(light.GetCenter(), 1.0));
 	//printVec("light Extent: ", ModelLight * glm::vec4(light.GetExtent(), 1.0));
 
@@ -384,6 +395,7 @@ int main(int args, char** argv)
         modelPalm = glm::rotate(modelPalm, glm::sin(dTheta), glm::vec3(0.0f, 1.0f, 0.0f)); // for sapce suit
    	
 		glEnable(GL_DEPTH_TEST);
+		glBeginQuery(GL_TIME_ELAPSED, queryID_VIR[queryBackBuffer][0]);
     	// Create ShadowMap
 		// Bind FBO for writing
 		glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
@@ -398,13 +410,13 @@ int main(int args, char** argv)
 			shadowMapShader.disable();
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		
-		glViewport(0, 0, WIDTH, HEIGHT);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 		// Render Shadow map
 		if (depthMapToggle)		
 		{
+			glViewport(0, 0, WIDTH, HEIGHT);
 			lightViewShader.use();
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_CULL_FACE);			
@@ -417,7 +429,7 @@ int main(int args, char** argv)
 		}
 		else
 		{
-			glBeginQuery(GL_TIME_ELAPSED, queryID_VIR[queryBackBuffer][0]);
+			
 			// Depth Prepass
 			/*depthPrePass.use();
 				depthPrePass.setMat4("u_projection", projection);
@@ -483,7 +495,8 @@ int main(int args, char** argv)
         glGetQueryObjectui64v(queryID_VIR[queryFrontBuffer][0], GL_QUERY_RESULT, &virTime);
         avgVIR_time += virTime / 1000000.0;
         if (numFrames % avgNumFrames == 0 && runtime) {
-            std::cout << "VIR: " << avgVIR_time / avgNumFrames;
+			std::cout << "VIR: " << avgVIR_time / avgNumFrames;
+			std::cout << "LIGHT SIZE: " << LIGHT_SIZE;
             std::cout << std::endl;
 			avgVIR_time = 0;
         }		

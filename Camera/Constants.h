@@ -44,7 +44,8 @@ enum ModelName
 	ENVIRONMENT = 15,
 	SQUARE = 16,
 	CONFERENCE = 17,
-	BREAKFASTROOM = 18
+	BREAKFASTROOM = 18,
+	DRAGON = 19
 };
 
 enum ShadowTechnique
@@ -83,7 +84,7 @@ glm::vec3 Up(0.0f, 1.0f, 0.0f);
 glm::vec3 front = glm::normalize(cameraPosition - lookAt);
 glm::vec3 side = glm::normalize(cameraPosition - lookAt);
 float VIRfov = glm::radians(45.0f);
-float fov = glm::radians(45.0f);
+float fov = glm::radians(60.0f);
 float defaultFOV = fov;// glm::radians(90.0f);
 float zNear = 0.10f;
 float zFar = 100.0;
@@ -98,7 +99,7 @@ glm::vec3 lightLookAt(5.2f, -12.50f, -16.0f);
 glm::vec3 defaultLightPosition(5.0f, 10.0f, 10.0f);
 float lightFOV = glm::radians(45.0f);
 float l_zNear = 01.0f;
-float LIGHT_SIZE = 0.01f;
+float LIGHT_SIZE = 0.1f;
 float LIGHT_STEP_SIZE = LIGHT_SIZE / 10;
 float FrustumWidth = 2 * std::tanf(lightFOV * 0.5f);
 float FrustumHeight = FrustumWidth;
