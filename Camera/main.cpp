@@ -65,14 +65,20 @@ int main(int args, char** argv)
 	printVec("Floor Center: ", floor.GetCenter());
 	printVec("Floor Extent: ", floor.GetExtent());
     glm::mat4 modelFloor;
-    modelFloor = glm::scale(modelFloor, glm::vec3(01.0f));	// it's a bit too big for our scene, so scale it down
     modelFloor = glm::translate(modelFloor, glm::vec3(0.00f, -1.00f, 1.00f));
+    modelFloor = glm::translate(modelFloor, -floor.GetCenter());
+    modelFloor = glm::scale(modelFloor, glm::vec3(0.30f, 1.0f, 0.3f));	// it's a bit too big for our scene, so scale it down
 
-	
-	
+	Model wall("./res/models/floor/floor.obj");
+	printVec("wall Center: ", floor.GetCenter());
+	printVec("wall Extent: ", floor.GetExtent());
+	glm::mat4 modelWall;
+	modelWall = glm::rotate(modelWall, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	modelWall = glm::translate(modelWall, glm::vec3(0.0, 3.5, -1.0  ));
+	modelWall = glm::scale(modelWall, glm::vec3(0.30f, 1.0, 0.3));	// it's a bit too big for our scene, so scale it down
     glm::mat4 modelPalm;
 	Model palm;
-	int model_number = ModelName::DRAGON;
+	int model_number = ModelName::SCENE;
 	CountNumberOfPoints = !true; debug = !true;
 	runtime = true; avgNumFrames = 200; csv = true;  dTheta = 0;
     switch (model_number)
@@ -87,15 +93,28 @@ int main(int args, char** argv)
 		cameraPosition =cameraDefaultPosition;
 		lookAt = lookAtDefault;
 		break;
+	case ModelName::SCENE:
+		palm.LoadMeshModel("./res/models/scene/scene.obj");
+		//modelPalm = glm::translate(modelPalm, -palm.GetCenter());
+		//modelPalm = glm::scale(modelPalm, glm::vec3(1.0f));
+		//modelPalm = glm::translate(modelPalm, palm.GetCenter());
+		modelPalm = glm::translate(modelPalm, glm::vec3(0.50f, -.800f, 0.0f));
+		//modelPalm = glm::rotate(modelPalm, -0.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+		//modelPalm = glm::rotate(modelPalm, -2.30f, glm::vec3(0.0f, 1.0f, 0.0f));
+		lightPosition = glm::vec3(7.836, 5.073, -5.532);
+		lightLookAt = glm::vec3(0.0f);
+		cameraPosition = glm::vec3(0.972, 3.543, -2.519);
+		lookAt = glm::vec3(-0.643, -1.692, 2.651);
+		break;
 	case ModelName::DRAGON:
-		palm.LoadMeshModel("./res/models/dragon/dragon_2M.obj");
+		palm.LoadMeshModel("./res/models/dragon/2dragons.obj");
 		modelPalm = glm::translate(modelPalm, -palm.GetCenter());
-		modelPalm = glm::scale(modelPalm, glm::vec3(1.50f));
+		modelPalm = glm::scale(modelPalm, glm::vec3(1.0f));
 		modelPalm = glm::translate(modelPalm, palm.GetCenter());
-		modelPalm = glm::translate(modelPalm, glm::vec3(00.0f, -palm.GetExtent().y - 0.1, 0.0f));
+		modelPalm = glm::translate(modelPalm, glm::vec3(00.0f, 0.0, 0.0f));
 		modelPalm = glm::rotate(modelPalm, -2.30f, glm::vec3(0.0f, 1.0f, 0.0f));
 		//modelPalm = glm::rotate(modelPalm, -2.30f, glm::vec3(0.0f, 1.0f, 0.0f));
-		lightPosition = glm::vec3(4.37894, 4.64508, -5.86765);
+		lightPosition = glm::vec3(3.37894, 4.64508, -5.86765);
 		lightLookAt = glm::vec3(0.0f);
 		cameraPosition = glm::vec3(1.213, 1.277, 0.943);
 		lookAt = glm::vec3(-2.091, -3.895, -0.457);
@@ -303,7 +322,7 @@ int main(int args, char** argv)
 	glm::mat4 ModelLight;
 	Model light("./res/models/square/square.obj");
 	ModelLight = glm::mat4();
-	ModelLight = glm::scale(ModelLight, glm::vec3(LIGHT_SIZE, LIGHT_SIZE, 1.0f));	// it's a bit too big for our scene, so scale it down
+	ModelLight = glm::scale(ModelLight, glm::vec3(LIGHT_SIZE*10.0f, LIGHT_SIZE*10.0f, 1.0f));	// it's a bit too big for our scene, so scale it down
 	ModelLight = glm::translate(ModelLight, lightPosition);
 	printVec("....Light Position: ", lightPosition);
 
@@ -318,8 +337,8 @@ int main(int args, char** argv)
 	
 	FrustumWidth = std::max(fabs(bboxScaled[0][0]), fabs(bboxScaled[1][0])) * 2.0f;
 	FrustumHeight =  std::max(fabs(bboxScaled[0][1]), fabs(bboxScaled[1][1])) * 2.0f;//*/
-	l_zNear = -bboxScaled[1][2] - 0.2;
-	//LIGHT_SIZE /= FrustumWidth;
+	l_zNear = -bboxScaled[1][2] - 1.4;
+	//LIGHT_SIZE /= (l_zNear * zFar);
 	std::cout << "l_zNear: " << l_zNear << std::endl;
 	std::cout << "LIGHT_SIZE: " << LIGHT_SIZE << std::endl;
 	glm::mat4 lightProj = glm::perspective(lightFOV, 1.0f, l_zNear, zFar);
@@ -333,9 +352,9 @@ int main(int args, char** argv)
 	);
 
 	glm::mat4 depthBiasMVP = biasMatrix * lightViewProj;
-	//glm::mat4 invLightView = glm::inverse(lightView);
+	glm::mat4 invLightView = glm::inverse(lightView);
 	//lightPosition = invLightView * glm::vec4(lightPosition, 1.0);;
-
+	//lightView = glm::lookAt(lightPosition, lightLookAt, glm::vec3(0.0f, 1.0f, 0.0f));  //altCamera.GetView();
 	
 	//printVec("light Center: ", ModelLight * glm::vec4(light.GetCenter(), 1.0));
 	//printVec("light Extent: ", ModelLight * glm::vec4(light.GetExtent(), 1.0));
@@ -369,7 +388,7 @@ int main(int args, char** argv)
 	pcss.setFloat("u_light_zNear", l_zNear);
 	pcss.setFloat("u_light_zFar", zFar);
 	pcss.setVec2("u_lightRadiusUV", glm::vec2(LIGHT_SIZE));
-	pcss.setInt("u_samplePattern", SamplePattern::POISSON_64_128);
+	pcss.setInt("u_samplePattern", SamplePattern::POISSON_32_64);
 	pcss.setBool("u_IsLightSrc", false);
 	pcss.disable();
 	
@@ -479,6 +498,8 @@ int main(int args, char** argv)
 					pcss.setInt("u_shadowMapPcf", 3);
 					pcss.setMat4("u_model", modelFloor);
 					floor.Draw(pcss);
+					pcss.setMat4("u_model", modelWall);
+					wall .Draw(pcss);
 					pcss.setMat4("u_model", modelPalm);
 					palm.Draw(pcss);					
 					pcss.setMat4("u_model", ModelLight);

@@ -529,14 +529,11 @@ void findBlocker(
             maxBlockers = 25.0;
             for (int i = 0; i < 25; ++i)
             {
-                float rotationAngle = random(gl_FragCoord.xyy, i) * 3.1415926;
-                vec2 rotationTrig = vec2(cos(rotationAngle), sin(rotationAngle));
-                // int index = int(16.0*random(gl_FragCoord.xyy, i))%25;
-                int index = int(25.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%25;
-                vec2 offset = Poisson25[index] * searchRegionRadius;
-                offset =  Rotate(offset, rotationTrig);
+                int index = int(25.0*random(gl_FragCoord.xyy, i))%25;
+                //int index = int(16.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%64;
+                vec2 offset = Poisson64[index] * searchRegionRadius;
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
-                float z = biasedZ(z0, dz_duv, offset);
+                float z = biasedZ(z0, dz_duv, offset) - 0.01;
                 if (shadowMapDepth < z)
                 {
                     accumBlockerDepth += shadowMapDepth;
@@ -551,9 +548,11 @@ void findBlocker(
             maxBlockers = 32.0;
             for (int i = 0; i < 32; ++i)
             {
-                vec2 offset = Poisson32[i] * searchRegionRadius;
+                 int index = int(32.0*random(gl_FragCoord.xyy, i))%32;
+                //int index = int(16.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%64;
+                vec2 offset = Poisson64[index] * searchRegionRadius;
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
-                float z = biasedZ(z0, dz_duv, offset);
+                float z = biasedZ(z0, dz_duv, offset) - 0.01;
                 if (shadowMapDepth < z)
                 {
                     accumBlockerDepth += shadowMapDepth;
@@ -568,9 +567,11 @@ void findBlocker(
             maxBlockers = 100.0;
             for (int i = 0; i < 100; ++i)
             {
-                vec2 offset = Poisson100[i] * searchRegionRadius;
+                int index = int(100.0*random(gl_FragCoord.xyy, i))%100;
+                //int index = int(16.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%64;
+                vec2 offset = Poisson64[index] * searchRegionRadius;
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
-                float z = biasedZ(z0, dz_duv, offset);
+                float z = biasedZ(z0, dz_duv, offset) - 0.01;
                 if (shadowMapDepth < z)
                 {
                     accumBlockerDepth += shadowMapDepth;
@@ -587,7 +588,7 @@ void findBlocker(
             {
                 int index = int(64.0*random(gl_FragCoord.xyy, i))%64;
                 //int index = int(16.0*random(floor(fs_in.WorldPos.xyz*1000.0), i))%64;
-                vec2 offset = Poisson64[index] * searchRegionRadius;
+                vec2 offset = Poisson64[i] * searchRegionRadius;
                 float shadowMapDepth = borderDepthTexture(u_shadowMap, uv + offset);
                 float z = biasedZ(z0, dz_duv, offset) - 0.01;
                 if (shadowMapDepth < z)

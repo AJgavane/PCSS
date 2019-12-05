@@ -45,7 +45,8 @@ enum ModelName
 	SQUARE = 16,
 	CONFERENCE = 17,
 	BREAKFASTROOM = 18,
-	DRAGON = 19
+	DRAGON = 19,
+	SCENE = 20
 };
 
 enum ShadowTechnique
@@ -99,7 +100,7 @@ glm::vec3 lightLookAt(5.2f, -12.50f, -16.0f);
 glm::vec3 defaultLightPosition(5.0f, 10.0f, 10.0f);
 float lightFOV = glm::radians(45.0f);
 float l_zNear = 01.0f;
-float LIGHT_SIZE = 0.1f;
+float LIGHT_SIZE = 0.05f;
 float LIGHT_STEP_SIZE = LIGHT_SIZE / 10;
 float FrustumWidth = 2 * std::tanf(lightFOV * 0.5f);
 float FrustumHeight = FrustumWidth;
