@@ -62,11 +62,6 @@ void handleKeys() {
 				break;
 			case SDLK_p:
 				depthMapToggle = !depthMapToggle;
-				if (depthMapToggle) {
-					depthMapIndex += 1;
-					depthMapIndex = depthMapIndex % NUM_IMAGES;
-					std::cout << "DepthMap: " << depthMapIndex << std::endl;
-				}
 				break;
 			case SDLK_i:
 				lookAt = lookAt + glm::vec3(0, 0, dt);

@@ -15,7 +15,7 @@ Display::Display(int width, int height, const std::string& title)
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1); // Allocate space for 2 frames.
 
-    m_window = SDL_CreateWindow(title.c_str(), 900, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_OPENGL);
+    m_window = SDL_CreateWindow(title.c_str(), 890, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_OPENGL);
     m_glContext = SDL_GL_CreateContext(m_window); // glCOntext is for specific window.
     
     GLenum status = glewInit();                   // starting opengl 
